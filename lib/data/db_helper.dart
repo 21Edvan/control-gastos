@@ -92,6 +92,8 @@ class DBHelper {
     return maps.map((m) => Category.fromMap(m)).toList();
   }
 
+
+
   // ────────────────────────────────────────
   // TRANSACTIONS
   // ────────────────────────────────────────
@@ -146,4 +148,51 @@ class DBHelper {
     final expenses = await getTotalByTypeForMonth('expense', month);
     return incomes - expenses;
   }
+
+Future<List<CategorySpending>> getTopExpenseCategoriesForMonth(
+  DateTime month, {
+  int limit = 3,
+}) async {
+  final db = await database;
+
+  final firstDay = DateTime(month.year, month.month, 1);
+  final nextMonth = DateTime(month.year, month.month + 1, 1);
+
+  final result = await db.rawQuery('''
+    SELECT c.name as category_name, SUM(t.amount) as total
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.type = 'expense'
+      AND t.date >= ?
+      AND t.date < ?
+    GROUP BY c.name
+    ORDER BY total DESC
+    LIMIT ?
+  ''', [
+    firstDay.toIso8601String(),
+    nextMonth.toIso8601String(),
+    limit,
+  ]);
+
+  return result.map((row) {
+    final total = (row['total'] as num?)?.toDouble() ?? 0.0;
+    return CategorySpending(
+      name: row['category_name'] as String,
+      total: total,
+    );
+  }).toList();
 }
+
+
+}
+
+class CategorySpending {
+  final String name;
+  final double total;
+
+  CategorySpending({
+    required this.name,
+    required this.total,
+  });
+}
+
